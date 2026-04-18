@@ -53,20 +53,22 @@ CMD ["npm", "run"]
 FROM node:22-alpine # use light weight image
 WORKDIR /app
 COPY package*.json ./ # caching the files that doesn't change frequently
+RUN npm install
 COPY . .
-RUN npm install --production && \
- npm run build && \
+RUN npm run build && \
  npm cache clean --force && \
- rm -rf /root/.npm && \
- rm -rf node_modules
+ rm -rf /root/.npm
+# NOTE: We CANNOT delete node_modules here if we plan to use `npm run preview` 
+# because Vite CLI lives in node_modules and is required to run the preview server.
 EXPOSE 3000
 CMD ["npm", "run", "preview"]
 ```
 
-1. using the `--production` is best practice as to not install any dev dependencies
-2. after building the artifact we don't need anything cashed
-3. we can delete the node configs as we don't need it for anything after build
-4. the downloaded packages has served its porpose we don't need them anymore
+1. Installing packages BEFORE copying the rest of the source code ensures we use **layer caching** effectively.
+2. After building the artifact we don't need the npm cache.
+3. We delete the `.npm` cache as we don't need it for anything after the build.
+4. *Limitation*: We are forced to keep `node_modules` because our runner (`npm run preview`) needs it. This is why we need **Multi-Stage Builds** to truly optimize the image.
+5. *Note on `--production`*: We cannot use `npm install --production` here because building a Vite app requires `devDependencies` (like `vite`, `typescript`, etc.). We need the full `node_modules` just to build the app!
 
 > [!note] NOTE
 > All this must be done in the same command as to not leave anything in the cached layers
@@ -79,6 +81,7 @@ CMD ["npm", "run", "preview"]
 - the only remaining files in the image is the files of the last layer the previous layers isn't maintained in the image unless referenced so even if we use the full image for the build the sized remain the same as long as the last stage image is the same.
 
 ```Dockerfile
+FROM node:22-alpine AS builder
 RUN npm install -g pnpm
 
 WORKDIR /app
@@ -99,3 +102,18 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 CMD [ "nginx", "-g", "daemon off;" ]
 ```
+
+## Distroless Images
+
+- Distroless images contain only your application and its runtime dependencies. They do not contain package managers, shells, or other utility programs you would expect to find in a standard Linux distribution.
+- **Benefits:** Dramatically smaller size, improved security (reduced attack surface), and fewer false positives in vulnerability scanners.
+
+## Security & Best Practices
+
+- **Non-root user:** By default, Docker runs containers as root. It is a critical best practice to use the `USER` instruction to run your application as a non-root user.
+- **Reduced attack surface:** Using minimal base images means fewer utilities and libraries are present, reducing the potential vectors for an attack.
+
+## Professional Tooling
+
+- **Dive:** A great CLI tool for exploring a Docker image, layer by layer. It helps you discover exactly what files are wasting space and what changes between layers.
+- **Slim (formerly DockerSlim):** An automated tool that analyzes your application and creates a minimized, secure container by automatically stripping out unused files.

@@ -2,6 +2,7 @@ FROM node:22-alpine
 
 RUN npm install -g pnpm
 
+USER user
 WORKDIR /app
 
 EXPOSE 3000

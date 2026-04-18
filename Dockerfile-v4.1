@@ -1,5 +1,6 @@
 FROM node:22 AS builder
 
+USER user
 WORKDIR /app
 
 COPY ./vite-react-template/package*.json .
