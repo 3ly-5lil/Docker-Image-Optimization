@@ -1,0 +1,3 @@
+[submodule "vite-react-template"]
+	path = vite-react-template
+	url = https://github.com/riipandi/vite-react-template
